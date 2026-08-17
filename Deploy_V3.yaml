@@ -1,0 +1,102 @@
+---
+# The Password Safe API key must NOT live in the Deployment. Create it once:
+#
+#   kubectl create secret generic pws-api \
+#     --from-literal=api-key='<NEW-KEY>;runas=NH-k8Example-local;'
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: passwordsafe-integrationv3
+  labels:
+    app: passwordsafe-integrationv3
+spec:
+  type: NodePort     # switch to LoadBalancer/NodePort to reach it from outside
+  selector:
+    app: passwordsafe-integrationv3
+  ports:
+    - name: http
+      port: 80
+      nodePort: 31220
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: passwordsafe-integrationv3
+  labels:
+    app: passwordsafe-integrationv3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: passwordsafe-integrationv3
+  template:
+    metadata:
+      labels:
+        app: passwordsafe-integrationv3
+      annotations:
+        # Roll the pods whenever the ConfigMap changes (update this by hand,
+        # or let kustomize/helm hash it for you).
+        demo/assets-revision: "2"
+    spec:
+      volumes:
+        - name: demo-assets
+          configMap:
+            name: cmv3
+            defaultMode: 0555      # read+execute; 0777 on a script is never needed
+        - name: secrets
+          emptyDir:
+            medium: Memory         # keep retrieved secrets off the node's disk
+
+      initContainers:
+        - name: secrets-agent
+          image: beyondtrust/secrets-agent:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: secrets
+              mountPath: /usr/src/app/k8s
+          env:
+            - name: SECRETS_PATH
+              value: "/usr/src/app/k8s"
+            - name: BT_API_URL
+              value: "https://pf922288.ps.beyondtrustcloud.com/BeyondTrust/api/public/v3"
+            - name: BT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pws-api
+                  key: api-key
+            - name: SECRETS_LIST
+              value: "k8s/k8s"
+            - name: MANAGED_ACCOUNTS_LIST
+              value: "masterk8s/paul"
+            - name: BT_VERIFY_CA
+              value: "True"        # set False only against a lab cert
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+
+      containers:
+        - name: web
+          image: nginx:1.27
+          command: ["/bin/sh", "/etc/pwsdemo/start.sh"]
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: secrets
+              mountPath: /usr/src/app/k8s
+              readOnly: true
+            - name: demo-assets
+              mountPath: /etc/pwsdemo
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /k8s/k8s/k8s.txt, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }

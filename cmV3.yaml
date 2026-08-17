@@ -1,0 +1,339 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmv3
+  namespace: default
+data:
+  start.sh: |
+    #!/bin/sh
+    # Publishes the demo page + the secret the BeyondTrust secrets-agent wrote,
+    # then hands PID 1 to nginx so the container's lifecycle tracks nginx.
+    set -eu
+
+    ASSETS=/etc/pwsdemo                  # ConfigMap mount (read-only)
+    AGENT_DIR=/usr/src/app/k8s           # shared emptyDir written by secrets-agent
+    DOCROOT=/usr/share/nginx/html
+
+    echo "[demo] publishing page"
+    cp "$ASSETS/index.html" "$DOCROOT/index.html"
+
+    echo "[demo] publishing secret from $AGENT_DIR/k8s/k8s"
+    mkdir -p "$DOCROOT/k8s/k8s"
+    if [ -s "$AGENT_DIR/k8s/k8s" ]; then
+        cp "$AGENT_DIR/k8s/k8s" "$DOCROOT/k8s/k8s/k8s.txt"
+        echo "[demo] ok — $(wc -c < "$DOCROOT/k8s/k8s/k8s.txt") bytes"
+    else
+        echo "[demo] WARN: $AGENT_DIR/k8s/k8s missing or empty; page will show 'Unavailable'" >&2
+        echo "[demo] contents of $AGENT_DIR:" >&2
+        ls -lR "$AGENT_DIR" >&2 || true
+    fi
+
+    exec nginx -g 'daemon off;'
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BeyondTrust Secrets Agent — Kubernetes Demo</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
+      :root {
+        --bg-0: #0b0f14;
+        --bg-1: #131a23;
+        --line: #263241;
+        --ink: #e8eef6;
+        --ink-dim: #8fa3b8;
+        --accent: #ff7a00;
+        --ok: #34d399;
+        --bad: #f87171;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 4rem 1.25rem;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1100px 520px at 50% -8%, rgba(255,122,0,.16), transparent 65%),
+          linear-gradient(180deg, var(--bg-1), var(--bg-0));
+      }
+
+      main { width: 100%; max-width: 680px; }
+
+      /* ---- header ---- */
+      .eyebrow {
+        display: inline-flex; align-items: center; gap: .55rem;
+        font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+        color: var(--accent); margin-bottom: 1rem;
+      }
+      .eyebrow::before {
+        content: ""; width: 22px; height: 2px; background: var(--accent); border-radius: 2px;
+      }
+
+      h1 {
+        font-size: clamp(1.8rem, 5vw, 2.9rem);
+        line-height: 1.1; margin: 0 0 .6rem; font-weight: 700; letter-spacing: -.02em;
+      }
+      h1 .type {
+        display: inline-block; overflow: hidden; white-space: nowrap;
+        border-right: .09em solid var(--accent);
+        width: 0;
+        animation: type 2.2s steps(18) .35s forwards, caret .85s step-end infinite;
+        vertical-align: bottom;
+      }
+      @keyframes type  { to { width: 18ch; } }
+      @keyframes caret { 50% { border-color: transparent; } }
+
+      .lede { color: var(--ink-dim); margin: 0 0 2.25rem; max-width: 46ch; }
+
+      /* ---- card ---- */
+      .card {
+        background: rgba(255,255,255,.035);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255,255,255,.02);
+      }
+      .card-title { font-weight: 650; font-size: .95rem; }
+      .card-title small {
+        display: block; font-weight: 400; color: var(--ink-dim);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; margin-top: .15rem;
+      }
+
+      .pill {
+        display: inline-flex; align-items: center; gap: .45rem; flex: none;
+        font-size: .74rem; font-weight: 650; letter-spacing: .03em;
+        padding: .34rem .7rem; border-radius: 999px;
+        border: 1px solid transparent; white-space: nowrap;
+      }
+      .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .pill.wait { color: var(--ink-dim); border-color: var(--line); background: rgba(255,255,255,.03); }
+      .pill.ok   { color: var(--ok);  border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.1); }
+      .pill.ok .dot { animation: pulse 2s ease-in-out infinite; }
+      .pill.bad  { color: var(--bad); border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); }
+      @keyframes pulse { 50% { opacity: .35; } }
+
+      .card-body { padding: 1.25rem; }
+
+      .label {
+        font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+        color: var(--ink-dim); margin-bottom: .5rem;
+      }
+
+      .value {
+        position: relative;
+        background: #080c11;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem 3.4rem 1rem 1rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 1.05rem;
+        word-break: break-all;
+        min-height: 3.4rem;
+        display: flex; align-items: center;
+      }
+      .value.is-error { color: var(--bad); font-size: .9rem; }
+      .value .skeleton {
+        display: block; height: 1.1rem; width: 60%; border-radius: 4px;
+        background: linear-gradient(90deg, #16202b 25%, #223040 50%, #16202b 75%);
+        background-size: 240% 100%;
+        animation: shimmer 1.3s linear infinite;
+      }
+      @keyframes shimmer { to { background-position: -140% 0; } }
+
+      .copy {
+        position: absolute; top: 50%; right: .6rem; transform: translateY(-50%);
+        font: inherit; font-size: .72rem; font-family: inherit;
+        color: var(--ink-dim); background: rgba(255,255,255,.05);
+        border: 1px solid var(--line); border-radius: 7px;
+        padding: .35rem .6rem; cursor: pointer; transition: color .15s, border-color .15s;
+      }
+      .copy:hover  { color: var(--ink); border-color: #3a4a5e; }
+      .copy.done   { color: var(--ok); border-color: rgba(52,211,153,.4); }
+      .copy[hidden] { display: none; }
+
+      dl {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 1rem; margin: 1.25rem 0 0; padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+      }
+      dl > div { min-width: 0; }
+      dt {
+        font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--ink-dim); margin-bottom: .3rem;
+      }
+      dd {
+        margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: .82rem; overflow-wrap: anywhere;
+      }
+
+      /* ---- footer ---- */
+      .actions {
+        display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+        margin-top: 1.5rem;
+      }
+      .btn {
+        font: inherit; font-size: .84rem; font-weight: 550;
+        color: var(--ink); background: rgba(255,255,255,.05);
+        border: 1px solid var(--line); border-radius: 8px;
+        padding: .5rem 1rem; cursor: pointer; transition: border-color .15s, background .15s;
+      }
+      .btn:hover { border-color: #3a4a5e; background: rgba(255,255,255,.08); }
+      .btn.primary {
+        background: var(--accent); border-color: var(--accent); color: #1a0f00; font-weight: 650;
+      }
+      .btn.primary:hover { background: #ff8c1f; border-color: #ff8c1f; }
+      .note { color: var(--ink-dim); font-size: .78rem; margin: 0; }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; }
+        h1 .type { width: 18ch; border-right-color: transparent; }
+      }
+    </style>
+    </head>
+    <body>
+    <main>
+      <p class="eyebrow">BeyondTrust Password Safe</p>
+      <h1><span class="type">Secrets, injected</span></h1>
+      <p class="lede">
+        The secrets-agent init container authenticated to Password Safe, retrieved
+        <code>k8s/k8s</code>, and wrote it to a shared volume before this pod started serving traffic.
+      </p>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            Retrieved secret
+            <small>k8s/k8s</small>
+          </div>
+          <span class="pill wait" id="pill"><span class="dot"></span><span id="pill-text">Loading</span></span>
+        </div>
+
+        <div class="card-body">
+          <p class="label">Value</p>
+          <div class="value" id="value">
+            <span class="skeleton"></span>
+            <button class="copy" id="copy" hidden>Copy</button>
+          </div>
+
+          <dl>
+            <div><dt>Length</dt><dd id="m-len">—</dd></div>
+            <div><dt>Source path</dt><dd id="m-path">/k8s/k8s/k8s.txt</dd></div>
+            <div><dt>Retrieved</dt><dd id="m-time">—</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="btn primary" id="refresh">Re-read secret</button>
+        <p class="note">Served by nginx from the volume written by the init container.</p>
+      </div>
+    </main>
+
+    <script>
+    (function () {
+      var SRC = '/k8s/k8s/k8s.txt';
+
+      var pill  = document.getElementById('pill');
+      var pillT = document.getElementById('pill-text');
+      var box   = document.getElementById('value');
+      var copy  = document.getElementById('copy');
+
+      function setPill(state, text) {
+        pill.className = 'pill ' + state;
+        pillT.textContent = text;
+      }
+
+      function meta(len, time) {
+        document.getElementById('m-len').textContent  = len;
+        document.getElementById('m-time').textContent = time;
+      }
+
+      function render(text) {
+        box.classList.remove('is-error');
+        box.textContent = text;
+        box.appendChild(copy);
+        copy.hidden = false;
+      }
+
+      function fail(state, label, detail) {
+        setPill('bad', label);
+        box.classList.add('is-error');
+        box.textContent = detail;
+        box.appendChild(copy);
+        copy.hidden = true;
+        meta('—', new Date().toLocaleTimeString());
+      }
+
+      function load() {
+        setPill('wait', 'Loading');
+        box.classList.remove('is-error');
+        box.textContent = '';
+        var sk = document.createElement('span');
+        sk.className = 'skeleton';
+        box.appendChild(sk);
+        box.appendChild(copy);
+        copy.hidden = true;
+
+        fetch(SRC, { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status + ' — the secret file was not found in the web root.');
+            return r.text();
+          })
+          .then(function (raw) {
+            var val = raw.replace(/\s+$/, '');
+            if (!val) {
+              fail('bad', 'Empty', 'The secret file exists but contains no data.');
+              return;
+            }
+            render(val);
+            setPill('ok', 'Injected');
+            meta(val.length + ' chars', new Date().toLocaleTimeString());
+          })
+          .catch(function (e) {
+            fail('bad', 'Unavailable', e.message);
+          });
+      }
+
+      copy.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var text = box.textContent.trim();
+        var done = function () {
+          copy.textContent = 'Copied';
+          copy.classList.add('done');
+          setTimeout(function () {
+            copy.textContent = 'Copy';
+            copy.classList.remove('done');
+          }, 1400);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(done);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(); } catch (err) {}
+          document.body.removeChild(ta);
+        }
+      });
+
+      document.getElementById('refresh').addEventListener('click', load);
+      load();
+    })();
+    </script>
+    </body>
+    </html>
