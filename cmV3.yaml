@@ -2,19 +2,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cmv3
-  # No hardcoded namespace - the pipeline passes -n explicitly. A namespace
-  # here that disagrees with the -n flag makes kubectl reject the apply.
+  
 data:
   start.sh: |
     #!/bin/sh
-    # Publishes the demo page + the secret the BeyondTrust secrets-agent wrote,
-    # then hands PID 1 to nginx so the container's lifecycle tracks nginx.
-    #
-    # Paths are written out in full on purpose. Shell variables break the
-    # CodePipeline EKS deploy action: it treats every dollar-sign token in a
-    # manifest as a placeholder it is expected to substitute, and fails the
-    # deploy when no matching action variable is configured. Do not add any
-    # dollar-sign references to this file - not even inside comments.
+    
     set -eu
 
     echo "[demo] publishing page"
