@@ -1,11 +1,6 @@
 version: 0.2
 
-# Deploys the BeyondTrust secrets-agent demo to EKS.
-# Manifests only - no image build, so no ECR and no privileged mode needed.
-#
-# Prerequisite (one time, out of band):
-#   kubectl -n default create secret generic pws-api \
-#     --from-literal=api-key='<KEY>;runas=<ACCOUNT>;'
+
 
 env:
   variables:
