@@ -1,32 +1,13 @@
----
-# The Password Safe API key must NOT live in this file. Create it once:
-#
-#   kubectl -n default create secret generic pws-api \
-#     --from-literal=api-key='<NEW-KEY>;runas=NH-k8Example-local;'
-#
-# No namespace is declared on these objects on purpose - the pipeline passes
-# -n explicitly, and a hardcoded namespace that disagrees with it makes
-# kubectl reject the apply.
-apiVersion: v1
-kind: Service
-metadata:
-  name: passwordsafe-integrationv3
-  labels:
-    app: passwordsafe-integrationv3
 spec:
-  # NodePort costs nothing (no ELB). Reach it with:
-  #   kubectl port-forward svc/passwordsafe-integrationv3 8080:80
-  # Do NOT open 31220 on the node security group - this page renders the
-  # retrieved secret in the browser, so a public NodePort publishes a
-  # Password Safe credential to the internet.
-  type: NodePort
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - 76.68.240.122/32
   selector:
     app: passwordsafe-integrationv3
   ports:
     - name: http
       port: 80
       targetPort: http
-      nodePort: 31220
 ---
 apiVersion: apps/v1
 kind: Deployment
