@@ -30,9 +30,7 @@ spec:
     metadata:
       labels:
         app: passwordsafe-integrationv3
-      # The demo/assets-revision annotation is gone. The pipeline now runs
-      # `kubectl rollout restart` after every apply, so pods pick up ConfigMap
-      # changes without anyone remembering to bump a counter by hand.
+  
     spec:
       volumes:
         - name: demo-assets
@@ -45,10 +43,7 @@ spec:
 
       initContainers:
         - name: secrets-agent
-          # :latest + Always pulls Docker Hub on every pod start. EKS nodes
-          # share a NAT egress IP, so anonymous pull rate limits can cause
-          # ImagePullBackOff. Mirror to ECR and pin a digest for anything
-          # beyond a demo.
+
           image: beyondtrust/secrets-agent:latest
           imagePullPolicy: Always
           volumeMounts:
@@ -89,9 +84,7 @@ spec:
               mountPath: /etc/pwsdemo
               readOnly: true
           readinessProbe:
-            # Only goes green once secrets-agent actually retrieved the secret,
-            # so a Password Safe auth failure fails the pipeline rather than
-            # shipping a broken page.
+            
             httpGet: { path: /k8s/k8s/k8s.txt, port: http }
             initialDelaySeconds: 2
             periodSeconds: 5
