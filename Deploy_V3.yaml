@@ -5,14 +5,15 @@ metadata:
   labels:
     app: passwordsafe-integrationv3
 spec:
-  type: NodePort
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - 76.68.240.122/32
   selector:
     app: passwordsafe-integrationv3
   ports:
     - name: http
       port: 80
       targetPort: http
-      nodePort: 31220
 ---
 apiVersion: apps/v1
 kind: Deployment
